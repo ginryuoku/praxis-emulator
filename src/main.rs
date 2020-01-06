@@ -1,34 +1,34 @@
 
-extern crate sdl2; 
+extern crate sdl2;
 
-use sdl2::pixels::Color;
 use sdl2::event::Event;
 use sdl2::keyboard::Keycode;
 use std::time::Duration;
 
-struct vdp {
+pub fn main() 
+{
+    const FB_WIDTH: u32 = 640;
+    const FB_HEIGHT: u32 = 480;
 
-}
+    let scale = 1;
 
-pub fn main() {
-    let sdl_context = sdl2::init().unwrap();
-    let video_subsystem = sdl_context.video().unwrap();
- 
-    let window = video_subsystem.window("Praxis PX-1 Emulator", 800, 600)
+    let window_width = FB_WIDTH * scale;
+    let window_height = FB_HEIGHT * scale;
+
+    let sdl = sdl2::init().unwrap();
+    let sdl_video = sdl.video().unwrap();
+    let sdl_window = sdl_video.window("PX1 Emulator", window_width, window_height)
         .position_centered()
+        .opengl()
         .build()
         .unwrap();
- 
-    let mut canvas = window.into_canvas().build().unwrap();
- 
-    canvas.set_draw_color(Color::RGB(0, 0, 0));
-    canvas.clear();
-    canvas.present();
-    let mut event_pump = sdl_context.event_pump().unwrap();
+    let mut sdl_canvas = sdl_window.into_canvas().build().unwrap();
+
+    let mut sdl_event_pump = sdl.event_pump().unwrap();
 
     'running: loop {
-        canvas.clear();
-        for event in event_pump.poll_iter() {
+        sdl_canvas.clear();
+        for event in sdl_event_pump.poll_iter() {
             match event {
                 Event::Quit {..} |
                 Event::KeyDown { keycode: Some(Keycode::Escape), .. } => {
@@ -38,8 +38,7 @@ pub fn main() {
             }
         }
         // The rest of the game loop goes here...
-
-        canvas.present();
+        sdl_canvas.present();
         ::std::thread::sleep(Duration::new(0, 1_000_000_000u32 / 60));
     }
 }
