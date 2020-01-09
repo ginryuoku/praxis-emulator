@@ -1,5 +1,6 @@
-
 extern crate sdl2;
+
+pub mod video;
 
 use sdl2::event::Event;
 use sdl2::keyboard::Keycode;
