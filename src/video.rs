@@ -3,6 +3,81 @@
 
 const BWFOUR_PAGESIZE: usize = 1024 * 64;
 
+//
+enum PageType {
+    Text,
+    Graphics,
+    TextBuffer0,
+    TextBuffer1,
+    A8x8Atlas,
+    A16x16Atlas,
+    A32x32Atlas,
+    A64x64Atlas,
+}
+
+struct BWFourFBRegisters {
+    page0x: u16,
+    page0y: u16,
+    page1x: u16,
+    page1y: u16,
+    page2x: u16,
+    page2y: u16,
+    page3x: u16,
+    page3y: u16,
+    cur_page: u8,
+    page0_isportrait: bool,
+    page3_type: PageType,
+}
+
+impl BWFourFBRegisters {
+    fn new() -> Self {
+        BWFourFBRegisters {
+            page0x: 0,
+            page0y: 0,
+            page1x: 0,
+            page1y: 0,
+            page2x: 0,
+            page2y: 0,
+            page3x: 0,
+            page3y: 0,
+            cur_page: 0,
+            page0_isportrait: false,
+            page3_type: PageType::Text,
+        }
+    }
+}
+
+pub struct BWFour {
+    page0: Box<[u8]>,
+    page1: Box<[u8]>,
+    page2: Box<[u8]>,
+    page3: Box<[u8]>,
+    registers: BWFourFBRegisters,
+}
+
+impl BWFour {
+    pub fn new() -> Self {
+        let page0 = vec![0; BWFOUR_PAGESIZE].into_boxed_slice();
+        let page1 = vec![0; BWFOUR_PAGESIZE].into_boxed_slice();
+        let page2 = vec![0; BWFOUR_PAGESIZE].into_boxed_slice();
+        let page3 = vec![0; BWFOUR_PAGESIZE].into_boxed_slice();
+        BWFour {
+            page0,
+            page1,
+            page2,
+            page3,
+            registers: BWFourFBRegisters::new(),
+        }
+    }
+
+    pub fn upload_font(mut self) {
+        self.registers.page3_type = PageType::A8x8Atlas;
+        for i in 0..(256 * 8) {
+            self.page3[i] = FONT_DATA_8X8[i];
+        }
+    }
+}
+
 pub static FONT_DATA_8X8: [u8; 256 * 8] = [
     0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
     0x7e, 0x81, 0xa5, 0x81, 0xbd, 0x99, 0x81, 0x7e,
@@ -261,57 +336,3 @@ pub static FONT_DATA_8X8: [u8; 256 * 8] = [
     0x00, 0x00, 0x3c, 0x3c, 0x3c, 0x3c, 0x00, 0x00,
     0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00
 ];
-
-struct BWFourFBRegisters {
-    page0x: u16,
-    page0y: u16,
-    page1x: u16,
-    page1y: u16,
-    page2x: u16,
-    page2y: u16,
-    page3x: u16,
-    page3y: u16,
-    cur_page: u8,
-    page0_isportrait: bool,
-}
-
-impl BWFourFBRegisters {
-    fn new() -> Self {
-        BWFourFBRegisters {
-            page0x: 0,
-            page0y: 0,
-            page1x: 0,
-            page1y: 0,
-            page2x: 0,
-            page2y: 0,
-            page3x: 0,
-            page3y: 0,
-            cur_page: 0,
-            page0_isportrait: false,
-        }
-    }
-}
-
-pub struct BWFour {
-    page0: Box<[u8]>,
-    page1: Box<[u8]>,
-    page2: Box<[u8]>,
-    page3: Box<[u8]>,
-    registers: BWFourFBRegisters,
-}
-
-impl BWFour {
-    pub fn new() -> Self {
-        let page0 = Vec::with_capacity(BWFOUR_PAGESIZE).into_boxed_slice();
-        let page1 = Vec::with_capacity(BWFOUR_PAGESIZE).into_boxed_slice();
-        let page2 = Vec::with_capacity(BWFOUR_PAGESIZE).into_boxed_slice();
-        let page3 = Vec::with_capacity(BWFOUR_PAGESIZE).into_boxed_slice();
-        BWFour {
-            page0,
-            page1,
-            page2,
-            page3,
-            registers: BWFourFBRegisters::new(),
-        }
-    }
-}

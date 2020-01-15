@@ -8,9 +8,9 @@ memory map:
 0x420000 page 2
 0x430000 page 3
 
-Each page is chopped into 4096-byte segments. The control segment is at 0x4nF000-0x4nFFFF.
+Each page is chopped into 4096-byte segments. Assume any leftover segments are reserved.
 
-Control segment:
+Control registers:
 - u16: horizontal res
 - u16: vertical res
 - u8: text columns
@@ -43,7 +43,8 @@ Control segment:
 - u16: text cursor y
 - u16: graphics cursor x
 - u16: graphics cursor y
-- u16: cursor glyph
+- u8:  cursor page
+- u16: cursor glyph number
 
 command:
 drawpoint
@@ -57,3 +58,15 @@ clearpagecontents
 updatetextcursor
 updategraphicscursor
 changepage
+bitblit8
+bitblit16
+bitblit32
+bitblit64
+bitblitregion
+dumpatlastogfxfb
+
+Atlases:
+
+All atlases are assumed to be their pixel size wide and 65536 / pixel size
+high. There will be a helper function that dumps the page to a Graphics 
+framebuffer.

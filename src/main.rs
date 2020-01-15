@@ -27,7 +27,9 @@ pub fn main()
 
     let mut sdl_event_pump = sdl.event_pump().unwrap();
 
-    let _bwfour = video::BWFour::new();
+    let bwfour = video::BWFour::new();
+
+    bwfour.upload_font();
 
     'running: loop {
         sdl_canvas.clear();
