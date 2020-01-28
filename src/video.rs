@@ -1,9 +1,11 @@
 // FIXME: because otherwise the linter *never shuts up*
 #![allow(dead_code)]
 
-const BWFOUR_PAGESIZE: usize = 1024 * 64;
-
+const CG_PAGENUM: usize = 32;
+const CG_FBSIZE: usize = 1024 * 1024 * 16;
+const CG_FONT_PAGE_SIZE: usize = 256 * 1024;
 //
+#[derive(PartialEq)]
 pub enum PageType {
     Text,
     Graphics,
@@ -18,6 +20,8 @@ pub enum PageType {
 struct PageRegisters {
     size_x: u16,
     size_y: u16,
+    p_start: u32,
+    p_end: u32,
     is_portrait: bool,
     pg_type: PageType,
 }
@@ -26,56 +30,148 @@ struct BWFourFBRegisters {
     cur_page: u8,
 }
 
+struct CGFBRegisters {
+    cur_page: u8,
+}
+
 impl PageRegisters {
     fn new() -> Self {
         PageRegisters {
             size_x: 0,
             size_y: 0,
+            p_start: 0,
+            p_end: 0,
             pg_type: PageType::Text,
             is_portrait: false,
         }
     }
 }
 
-impl BWFourFBRegisters {
+impl CGFBRegisters {
     fn new() -> Self {
-        BWFourFBRegisters {
+        CGFBRegisters {
             cur_page: 0,
         }
     }
 }
 
-pub struct BWFour {
-    pages: Box<[u8]>,
-    page_reg: [PageRegisters; 4],
-    registers: BWFourFBRegisters,
+pub struct CGFB {
+    pages: Box<[u32]>,
+    page_reg: Vec<PageRegisters>,
+    registers: CGFBRegisters,
 }
 
-impl BWFour {
+impl CGFB {
     pub fn new() -> Self {
-        let page_reg: [PageRegisters; 4] = [PageRegisters::new(), PageRegisters::new(), PageRegisters::new(), PageRegisters::new()];
-        BWFour {
-            pages: vec![0; BWFOUR_PAGESIZE * 4].into_boxed_slice(),
-            page_reg,
-            registers: BWFourFBRegisters::new(),
+        let mut page_reg = Vec::with_capacity(CG_PAGENUM);
+        for _ in 0..CG_PAGENUM {
+            page_reg.push(PageRegisters::new());
         }
+        CGFB {
+            pages: vec![0; CG_FBSIZE].into_boxed_slice(),
+            page_reg,//: vec![PageRegisters::new(); CG_PAGENUM],
+            registers: CGFBRegisters::new(),
+        }        
     }
 
     pub fn upload_font(&mut self) {
-        self.page_reg[3].size_x = 8;
-        self.page_reg[3].size_y = 8192;
-        self.change_page_type(3, PageType::A8x8Atlas);
+        self.page_reg[31].size_x = 8;
+        self.page_reg[31].size_y = 8192;
+        let p_start = ((CG_FBSIZE / CG_PAGENUM) * 31) as u32;
+        let p_end = ((CG_FBSIZE / CG_PAGENUM) * 31) as u32 + CG_FONT_PAGE_SIZE as u32;
+        self.page_reg[31].p_start = p_start;
+        self.page_reg[31].p_end = p_end;
+        self.fb_change_page_type(31, PageType::A8x8Atlas);
         for i in 0..(256 * 8) {
-            self.pages[(BWFOUR_PAGESIZE * 3) + i] = FONT_DATA_8X8[i];
+            for j in 0..=7 {
+                let bit: bool = ((FONT_DATA_8X8[i] << j) & 0x1) != 0;
+                if bit {
+                    self.pages[(i * 4) + (j * 4) + p_start as usize] = 0xFFFF_FFFF;
+                } else {
+                    self.pages[(i * 4) + (j * 4) + p_start as usize] = 0x0;
+                }
+            }
         }
     }
-    pub fn change_page_type(&mut self, page: u8, pg_type: PageType) {
-        if page <= 3 {
+
+    pub fn fb_print_char(&mut self, page: usize, x: u8, y: u8, letter: u16) {
+        if self.page_reg[page].pg_type == PageType::Text {
+            if page <= (CG_PAGENUM - 1) {
+                let page_width: usize = self.page_reg[page as usize].size_x as usize;
+                let page_offset = self.fb_get_page_start(page);
+                let y_start = (y as usize) * page_width as usize;
+                let offset: usize = page_offset + y_start;
+                let letter_offset = (letter as usize) * 8;
+                for font_x in 0..7 {
+                    for font_y in 0..7 {
+                        self.pages[offset + (font_y * page_width) + ((x as usize * 8) + font_x)] = self.pages[letter_offset + (font_y * 8) + (font_x)]; 
+                    }
+                }
+            }
+        }
+    }
+
+    pub fn fb_change_page_type(&mut self, page: u8, pg_type: PageType) {
+        if page <= (CG_PAGENUM as u8 - 1) {
             self.page_reg[page as usize].pg_type = pg_type;
         } else {
             println!("change_page_type: invalid page number specified");
         }
     }
+
+    pub fn fb_fill_50_gradient(&mut self, page: usize) {
+        let page_offset = page as usize * (CG_FBSIZE / CG_PAGENUM);
+
+        let fb_size: usize = self.page_reg[page].size_x as usize * self.page_reg[page].size_y as usize;
+        if self.page_reg[page].pg_type == PageType::Graphics {
+            if page <= 30 {
+                for i in page_offset..(page_offset+fb_size) {
+                    let line = (i - page_offset) / self.page_reg[page].size_x as usize;
+                    if line % 2 == 0 {
+                        if i % 2 == 0 {
+                            self.pages[i] = 0xFFFF_FFFF;
+                        }
+                        else {
+                            self.pages[i] = 0x0;
+                        }
+                    } else {
+                        if i % 2 == 1 {
+                            self.pages[i] = 0xFFFF_FFFF;
+                        }
+                        else {
+                            self.pages[i] = 0x0;
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    pub fn fb_get_page_start(&self, page: usize) -> usize {
+        self.page_reg[page].p_start as usize
+    }
+
+    pub fn fb_get_page_end(&self, page: usize) -> usize {
+        self.page_reg[page].p_end as usize
+    }
+
+    pub fn fb_set_page_res(&mut self, page: usize, x: u16, y: u16) {
+        self.page_reg[page as usize].size_x = x;
+        self.page_reg[page as usize].size_y = y;
+        self.page_reg[page as usize].p_start = ((CG_FBSIZE / CG_PAGENUM) * page) as u32;
+        self.page_reg[page as usize].p_end = (((CG_FBSIZE / CG_PAGENUM) * page) + ((x as usize * y as usize) as usize)) as u32; 
+    }
+
+    pub fn fb_present(&self, page: usize) -> Box<[u32]> {
+        let fb_size: usize = self.page_reg[page].size_x as usize * self.page_reg[page].size_y as usize;
+        let page_begin = self.fb_get_page_start(page);
+        let page_end = self.fb_get_page_end(page);
+        let mut framebuffer = vec![0 as u32; fb_size].into_boxed_slice();
+        for i in page_begin..page_end {
+            framebuffer[(i - page_begin) as usize] = self.pages[i as usize];
+        }
+        framebuffer
+    }    
 }
 
 pub static FONT_DATA_8X8: [u8; 256 * 8] = [
