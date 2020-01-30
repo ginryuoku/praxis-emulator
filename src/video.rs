@@ -74,6 +74,10 @@ impl CGFB {
         }        
     }
 
+    pub fn fb_draw_pixel_raw(&mut self, pg_offset: usize, x: usize, y: usize, c: u32) {
+        self.pages[pg_offset + x + y] = c;
+    }
+
     pub fn upload_font(&mut self) {
         self.page_reg[31].size_x = 8;
         self.page_reg[31].size_y = 8192;
@@ -83,15 +87,32 @@ impl CGFB {
         self.page_reg[31].p_end = p_end;
         self.fb_change_page_type(31, PageType::A8x8Atlas);
         for i in 0..(256 * 8) {
-            for j in 0..=7 {
-                let bit: bool = ((FONT_DATA_8X8[i] << j) & 0x1) != 0;
-                if bit {
-                    self.pages[(i * 4) + (j * 4) + p_start as usize] = 0xFFFF_FFFF;
-                } else {
-                    self.pages[(i * 4) + (j * 4) + p_start as usize] = 0x0;
+            let offset: usize = (64 * i) + p_start as usize;
+            for y in 0..8 {
+                for x in 0..8 {
+                    let byte2bit: bool = ((FONT_DATA_8X8[i] >> (7 - x)) & 0x1) != 0;
+                    if byte2bit {
+                        self.fb_draw_pixel_raw(offset, x, y, 0xFFFF_FFFF);
+                    } else {
+                        self.fb_draw_pixel_raw(offset, x, y, 0x0);
+                    }
                 }
             }
         }
+    }
+
+    pub fn decode_font(&mut self, glyph_num: usize) -> [u32; 64] {
+        let mut font: [u32; 64] = [0; 64];
+        for font_y in 0..=7 {
+            for font_x in 0..=7 {
+                let i = (glyph_num * 8) + font_y;
+                let byte2bit: bool = ((FONT_DATA_8X8[i] >> (7 - font_x)) & 0x1) != 0;
+                if byte2bit {
+                    font[(font_y * 8) + (font_x)] = 0xFFFF_FFFF;
+                }
+            }
+        }
+        font
     }
 
     pub fn fb_print_char(&mut self, page: usize, x: u8, y: u8, letter: u16) {
@@ -101,10 +122,12 @@ impl CGFB {
                 let page_offset = self.fb_get_page_start(page);
                 let y_start = (y as usize) * page_width as usize;
                 let offset: usize = page_offset + y_start;
-                let letter_offset = (letter as usize) * 8;
-                for font_x in 0..7 {
-                    for font_y in 0..7 {
-                        self.pages[offset + (font_y * page_width) + ((x as usize * 8) + font_x)] = self.pages[letter_offset + (font_y * 8) + (font_x)]; 
+                let glyph = self.decode_font(letter as usize);
+                for font_x in 0..=7 {
+                    for font_y in 0..=7 {
+                        let page_coord = offset + (font_y * page_width) + ((x as usize * 8) + font_x);
+                        let letter_coord = (font_y * 8) + (font_x);
+                        self.pages[page_coord] = glyph[letter_coord]; 
                     }
                 }
             }
@@ -165,10 +188,10 @@ impl CGFB {
     pub fn fb_present(&self, page: usize) -> Box<[u32]> {
         let fb_size: usize = self.page_reg[page].size_x as usize * self.page_reg[page].size_y as usize;
         let page_begin = self.fb_get_page_start(page);
-        let page_end = self.fb_get_page_end(page);
         let mut framebuffer = vec![0 as u32; fb_size].into_boxed_slice();
-        for i in page_begin..page_end {
-            framebuffer[(i - page_begin) as usize] = self.pages[i as usize];
+        for i in 0..fb_size {
+            let i_fb: usize = i + page_begin;
+            framebuffer[i] = self.pages[i_fb];
         }
         framebuffer
     }    

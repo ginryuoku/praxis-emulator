@@ -40,7 +40,7 @@ pub fn main()
     let sdl_texture_creator = sdl_canvas.texture_creator();
     let mut fb_texture = sdl_texture_creator.create_texture_streaming(PixelFormatEnum::ARGB32, FB_WIDTH, FB_HEIGHT).unwrap();
 
-    let hello_text = "H".as_bytes();
+    let hello_text = "Praxis PX-1".as_bytes();
 
     for i in 0..20 {
         if i < hello_text.len() {
@@ -49,7 +49,7 @@ pub fn main()
         }
     }
 
-    cur_page = 1;
+    cur_page = 0;
     &cg32.fb_change_page_type(1, video::PageType::Graphics);
     &cg32.fb_fill_50_gradient(1);
     'running: loop {
@@ -65,13 +65,20 @@ pub fn main()
         }
         fb = cg32.fb_present(cur_page);
         fb_texture.with_lock(None, |buffer: &mut [u8], _pitch: usize| {
-            for i in 0..(FB_HEIGHT * FB_WIDTH) {
+            let mut size: usize = (FB_HEIGHT * FB_WIDTH) as usize;
+            if size < buffer.len() {
+                size = buffer.len();
+            }
+            for i in 0..size {
                 let offset: usize = (i * 4) as usize;
-                buffer[offset + 0] = ((fb[i as usize] >>  0) & 0xFF) as u8;
-                //println!("fb_texture: {}", ((fb[i as usize] >>  0) & 0xFF));
-                buffer[offset + 1] = ((fb[i as usize] >>  8) & 0xFF) as u8;
-                buffer[offset + 2] = ((fb[i as usize] >> 16) & 0xFF) as u8;
-                buffer[offset + 3] = ((fb[i as usize] >> 24) & 0xFF) as u8;
+                if offset < fb.len() {
+                    buffer[offset + 0] = ((fb[i as usize] >>  0) & 0xFF) as u8;
+                    //println!("fb_texture: {}", ((fb[i as usize] >>  0) & 0xFF));
+                    buffer[offset + 1] = ((fb[i as usize] >>  8) & 0xFF) as u8;
+                    buffer[offset + 2] = ((fb[i as usize] >> 16) & 0xFF) as u8;
+                    buffer[offset + 3] = ((fb[i as usize] >> 24) & 0xFF) as u8;
+                }
+
             } 
         }).unwrap();
 
