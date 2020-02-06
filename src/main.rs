@@ -24,7 +24,7 @@ pub fn main()
         .arg(Arg::with_name("kernel")
             .short("b")
             .required(true)
-            .default_value("./sys/kernel")
+            .default_value("./os.bin")
             .value_name("FILE"))
         .get_matches();
 

@@ -48,11 +48,17 @@ use byteorder::{LittleEndian, ByteOrder};
 
 enum Instruction {
     ADDI(u8, i32),
+    ADDIW(u8, u8, i32),
     AUIPC(u8, i32),
     JAL(u8, i32),
     JALR(u8, u8, i32),
     LUI(u8, i32),
     BEQ(u8, u8, i32),
+    BNE(u8, u8, i32),
+    BLT(u8, u8, i32),
+    BGE(u8, u8, i32),
+    BLTU(u8, u8, i32),
+    BGEU(u8, u8, i32),
     LB(u8, u8, i32),
     LBU(u8, u8, i32),
     //LH(u8, u8, i32),
@@ -234,7 +240,7 @@ impl Instruction {
             0x17 => Some(Instruction::AUIPC(Self::get_rd(word), Self::get_u_imm(word))),
             0x1b => {
                 match Self::get_funct3(word) {
-                    0 => panic!("Unimplemented opcode: ADDIW"),
+                    0 => Some(Instruction::ADDIW(Self::get_rs1(word), Self::get_rd(word), Self::get_i_imm(word))),
                     1 => Some(Instruction::SLLIW(Self::get_rs1(word), Self::get_rd(word), Self::get_i_imm(word))),
                     5 => {
                         match Self::get_funct7(word) {
@@ -273,6 +279,13 @@ impl Instruction {
             0x63 => {
                 match Self::get_funct3(word) {
                     0 => Some(Instruction::BEQ(Self::get_rs1(word), Self::get_rs2(word), Self::get_b_imm(word))),
+                    1 => Some(Instruction::BNE(Self::get_rs1(word), Self::get_rs2(word), Self::get_b_imm(word))),
+                    2 => panic!("Unimplemented opcode: Reserved branch"),
+                    3 => panic!("Unimplemented opcode: Reserved branch"),
+                    4 => Some(Instruction::BLT(Self::get_rs1(word), Self::get_rs2(word), Self::get_b_imm(word))),
+                    5 => Some(Instruction::BGE(Self::get_rs1(word), Self::get_rs2(word), Self::get_b_imm(word))),
+                    6 => Some(Instruction::BLTU(Self::get_rs1(word), Self::get_rs2(word), Self::get_b_imm(word))),
+                    7 => Some(Instruction::BGEU(Self::get_rs1(word), Self::get_rs2(word), Self::get_b_imm(word))),
                     _ => None
                 }
             }
@@ -691,6 +704,13 @@ impl CPU {
                 self.csr.advance();
                 self.pc.wrapping_add(4)
             },
+            Instruction::ADDIW(rs1, rd, value) => {
+                println!("Opcode ADDIW (x{}, offset 0x{:x})", rs1, value);
+                let result = self.registers.read_reg(rs1).wrapping_add(self.sign_extend_32_64(value)) & 0xFFFF_FFFF;
+                self.registers.write_reg(rd, result as u64);
+                self.csr.advance();
+                self.pc.wrapping_add(4)
+            },
             Instruction::JAL(rd, offset) => {
                 println!("Opcode JAL: jumping to {:x}, offset {:x}", self.pc.wrapping_add((offset as i64) as u64), offset);
                 self.registers.write_reg(rd, self.pc + 4);
@@ -846,6 +866,56 @@ impl CPU {
             Instruction::BEQ(rs1, rs2, b_imm) => {
                 println!("Opcode: BEQ");
                 if self.registers.read_reg(rs1) == self.registers.read_reg(rs2) {
+                    self.csr.advance();
+                    self.pc.wrapping_add(self.sign_extend_32_64(b_imm))
+                } else {
+                    self.csr.advance();
+                    self.pc.wrapping_add(4)
+                }
+            }
+            Instruction::BNE(rs1, rs2, b_imm) => {
+                println!("Opcode: BNE");
+                if self.registers.read_reg(rs1) != self.registers.read_reg(rs2) {
+                    self.csr.advance();
+                    self.pc.wrapping_add(self.sign_extend_32_64(b_imm))
+                } else {
+                    self.csr.advance();
+                    self.pc.wrapping_add(4)
+                }
+            }
+            Instruction::BLT(rs1, rs2, b_imm) => {
+                println!("Opcode: BLT");
+                if (self.registers.read_reg(rs1) as i64) < (self.registers.read_reg(rs2) as i64) {
+                    self.csr.advance();
+                    self.pc.wrapping_add(self.sign_extend_32_64(b_imm))
+                } else {
+                    self.csr.advance();
+                    self.pc.wrapping_add(4)
+                }
+            }
+            Instruction::BLTU(rs1, rs2, b_imm) => {
+                println!("Opcode: BLTU");
+                if self.registers.read_reg(rs1) < self.registers.read_reg(rs2) {
+                    self.csr.advance();
+                    self.pc.wrapping_add(self.sign_extend_32_64(b_imm))
+                } else {
+                    self.csr.advance();
+                    self.pc.wrapping_add(4)
+                }
+            }
+            Instruction::BGE(rs1, rs2, b_imm) => {
+                println!("Opcode: BGE");
+                if (self.registers.read_reg(rs1) as i64) >= (self.registers.read_reg(rs2) as i64) {
+                    self.csr.advance();
+                    self.pc.wrapping_add(self.sign_extend_32_64(b_imm))
+                } else {
+                    self.csr.advance();
+                    self.pc.wrapping_add(4)
+                }
+            }
+            Instruction::BGEU(rs1, rs2, b_imm) => {
+                println!("Opcode: BGEU");
+                if self.registers.read_reg(rs1) != self.registers.read_reg(rs2) {
                     self.csr.advance();
                     self.pc.wrapping_add(self.sign_extend_32_64(b_imm))
                 } else {
