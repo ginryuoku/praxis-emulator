@@ -1,5 +1,8 @@
 extern crate sdl2;
+extern crate byteorder;
+extern crate clap;
 
+pub mod cpu;
 pub mod video;
 
 use sdl2::pixels::PixelFormatEnum;
@@ -7,13 +10,36 @@ use sdl2::pixels::PixelFormatEnum;
 use sdl2::event::Event;
 use sdl2::keyboard::Keycode;
 use std::time::Duration;
+use std::io::Read;
+use clap::{Arg, App};
+
+const CLOCK_SPEED_MHZ: usize = 25;
+const MHZ: usize = 1000 * 1000;
+const CLOCK_SPEED_HZ: usize = CLOCK_SPEED_MHZ * MHZ;
 
 pub fn main() 
 {
+    let matches = App::new("Praxis PC Emulator")
+        .author("Michelle Darcy <mdarcy137@gmail.com")
+        .arg(Arg::with_name("kernel")
+            .short("b")
+            .required(true)
+            .default_value("./sys/kernel")
+            .value_name("FILE"))
+        .get_matches();
+
+    let kernel = matches.value_of("kernel").map(|path| buffer_from_file(path)).unwrap();
+
+    let cpu0 = cpu::CPU::new(kernel);
+    let mut cpu0_ref = cpu0;
+    cpu0_ref.reset();
+
     const FB_WIDTH: u32 = 640;
     const FB_HEIGHT: u32 = 480;
 
     let scale = 1;
+
+    let mut framecount: usize = 0;
 
     let window_width = FB_WIDTH * scale;
     let window_height = FB_HEIGHT * scale;
@@ -53,6 +79,7 @@ pub fn main()
     &cg32.fb_change_page_type(1, video::PageType::Graphics);
     &cg32.fb_fill_50_gradient(1);
     'running: loop {
+        cpu0_ref.run(CLOCK_SPEED_HZ / 60, framecount);
         sdl_canvas.clear();
         for event in sdl_event_pump.poll_iter() {
             match event {
@@ -86,6 +113,14 @@ pub fn main()
 
         // The rest of the game loop goes here...
         sdl_canvas.present();
+        framecount = framecount.wrapping_add(1);
         ::std::thread::sleep(Duration::new(0, 1_000_000_000u32 / 60));
     }
+}
+
+fn buffer_from_file(path: &str) -> Vec<u8> {
+    let mut file = std::fs::File::open(path).expect("File not present");
+    let mut buffer = Vec::new();
+    file.read_to_end(&mut buffer).expect("Could not read file");
+    buffer
 }

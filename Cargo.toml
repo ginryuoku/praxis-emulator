@@ -9,4 +9,4 @@ edition = "2018"
 [dependencies]
 "clap" = "2.33.0"
 "sdl2" = "0.33.0"
-#"bitvec" = "0.17.2"
+"byteorder" = "1.3.2"

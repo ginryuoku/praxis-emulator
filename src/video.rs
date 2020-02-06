@@ -69,7 +69,7 @@ impl CGFB {
         }
         CGFB {
             pages: vec![0; CG_FBSIZE].into_boxed_slice(),
-            page_reg,//: vec![PageRegisters::new(); CG_PAGENUM],
+            page_reg,
             registers: CGFBRegisters::new(),
         }        
     }
