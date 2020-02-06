@@ -57,27 +57,27 @@ pub fn main()
 
     let mut cg32 = video::CGFB::new();
 
-    &cg32.upload_font();
+    cg32.upload_font();
     let mut cur_page: usize = 0;
-    &cg32.fb_set_page_res(0, FB_WIDTH as u16, FB_HEIGHT as u16);
-    &cg32.fb_set_page_res(1, FB_WIDTH as u16, FB_HEIGHT as u16);
-    &cg32.fb_set_page_res(2, FB_WIDTH as u16, FB_HEIGHT as u16);
+    cg32.fb_set_page_res(0, FB_WIDTH as u16, FB_HEIGHT as u16);
+    cg32.fb_set_page_res(1, FB_WIDTH as u16, FB_HEIGHT as u16);
+    cg32.fb_set_page_res(2, FB_WIDTH as u16, FB_HEIGHT as u16);
     let mut fb: Box<[u32]>;
     let sdl_texture_creator = sdl_canvas.texture_creator();
     let mut fb_texture = sdl_texture_creator.create_texture_streaming(PixelFormatEnum::ARGB32, FB_WIDTH, FB_HEIGHT).unwrap();
 
-    let hello_text = "Praxis PX-1".as_bytes();
+    let hello_text = b"Praxis PX-1";
 
     for i in 0..20 {
         if i < hello_text.len() {
             let letter: u16 = hello_text[i] as u16;
-            &cg32.fb_print_char(cur_page, i as u8, 0, letter);
+            cg32.fb_print_char(cur_page, i as u8, 0, letter);
         }
     }
 
     cur_page = 0;
-    &cg32.fb_change_page_type(1, video::PageType::Graphics);
-    &cg32.fb_fill_50_gradient(1);
+    cg32.fb_change_page_type(1, video::PageType::Graphics);
+    cg32.fb_fill_50_gradient(1);
     'running: loop {
         cpu0_ref.run(CLOCK_SPEED_HZ / 60, framecount);
         sdl_canvas.clear();
@@ -99,7 +99,7 @@ pub fn main()
             for i in 0..size {
                 let offset: usize = (i * 4) as usize;
                 if offset < fb.len() {
-                    buffer[offset + 0] = ((fb[i as usize] >>  0) & 0xFF) as u8;
+                    buffer[offset] = ((fb[i as usize]) & 0xFF) as u8;
                     //println!("fb_texture: {}", ((fb[i as usize] >>  0) & 0xFF));
                     buffer[offset + 1] = ((fb[i as usize] >>  8) & 0xFF) as u8;
                     buffer[offset + 2] = ((fb[i as usize] >> 16) & 0xFF) as u8;

@@ -98,224 +98,230 @@ impl Instruction {
         let opcode_c = Self::get_rvc_opcode(word);
         if word == 0 || word == 0xFFFF_FFFF {
             panic!("Illegal instruction: {:#x} ({:#b})", opcode, opcode);
+        } else if opcode_c != 0b11 {
+            println!("RVC Opcode: {:#x} ({:#b})", opcode_c, opcode_c);
+            Self::from_word_rvc(word)
         } else {
-            if opcode_c != 0b11 {
-                println!("RVC Opcode: {:#x} ({:#b})", opcode_c, opcode_c);
-                match opcode_c {
-                    0 => {
-                        match Self::get_rvc_funct3(word) {
-                            0 => Some(Instruction::CXADDI4SPN(Self::get_rvc_rs1rd_compact(word), Self::get_rvc_imm(word))),
-                            1 => panic!("Unimplemented RVC Op: C.FLD"),
-                            2 => panic!("Unimplemented RVC Op: C.LW"),
-                            3 => panic!("Unimplemented RVC Op: C.LD"),
-                            4 => panic!("Illegal RVC-Op: Reserved"),
-                            5 => panic!("Unimplemented RVC Op: C.FSD"),
-                            6 => Some(Instruction::CXSW(Self::get_rvc_rs1rd_compact(word), Self::get_rvc_rs2_compact(word), Self::get_rvc_imm(word))),
-                            7 => Some(Instruction::CXSD(Self::get_rvc_rs1rd_compact(word), Self::get_rvc_rs2_compact(word), Self::get_rvc_imm(word))),
-                            _ => None,
+            println!("Raw opcode: {:#x} ({:#b})", opcode, opcode);
+            Self::from_word_std(word)
+        }
+    }
+
+    fn from_word_rvc(word: u32) -> Option<Instruction> {
+        let opcode_c = Self::get_rvc_opcode(word);
+        match opcode_c {
+            0 => {
+                match Self::get_rvc_funct3(word) {
+                    0 => Some(Instruction::CXADDI4SPN(Self::get_rvc_rs1rd_compact(word), Self::get_rvc_imm(word))),
+                    1 => panic!("Unimplemented RVC Op: C.FLD"),
+                    2 => panic!("Unimplemented RVC Op: C.LW"),
+                    3 => panic!("Unimplemented RVC Op: C.LD"),
+                    4 => panic!("Illegal RVC-Op: Reserved"),
+                    5 => panic!("Unimplemented RVC Op: C.FSD"),
+                    6 => Some(Instruction::CXSW(Self::get_rvc_rs1rd_compact(word), Self::get_rvc_rs2_compact(word), Self::get_rvc_imm(word))),
+                    7 => Some(Instruction::CXSD(Self::get_rvc_rs1rd_compact(word), Self::get_rvc_rs2_compact(word), Self::get_rvc_imm(word))),
+                    _ => None,
+                }
+            },
+            1 => {
+                match Self::get_rvc_funct3(word) {
+                    0 => Some(Instruction::CXADDI(Self::get_rvc_rs1rd(word), Self::get_rvc_nzimm(word))),
+                    1 => Some(Instruction::CXADDIW(Self::get_rvc_rs1rd(word), Self::get_rvc_imm(word))),
+                    2 => Some(Instruction::CXLI(Self::get_rvc_rs1rd(word), Self::get_rvc_imm(word))),
+                    3 => {
+                        let rd = Self::get_rvc_rs1rd(word);
+                        if rd == 2 {
+                            panic!("Unimplemented RVC Op: C.ADDI16SP")
+                        } else {
+                            Some(Instruction::CXLUI(rd, Self::get_rvc_nzimm(word)))
                         }
                     },
-                    1 => {
-                        match Self::get_rvc_funct3(word) {
-                            0 => Some(Instruction::CXADDI(Self::get_rvc_rs1rd(word), Self::get_rvc_nzimm(word))),
-                            1 => Some(Instruction::CXADDIW(Self::get_rvc_rs1rd(word), Self::get_rvc_imm(word))),
-                            2 => Some(Instruction::CXLI(Self::get_rvc_rs1rd(word), Self::get_rvc_imm(word))),
+                    4 => {
+                        match Self::get_rvc_bitwise_high(word) {
+                            0 => panic!("Unimplemented RVC Op: C.SRLI64"),
+                            1 => panic!("Unimplemented RVC Op: C.SRAI64"),
+                            2 => panic!("Unimplemented RVC Op: C.ANDI"),
                             3 => {
-                                let rd = Self::get_rvc_rs1rd(word);
-                                if rd == 2 {
-                                    panic!("Unimplemented RVC Op: C.ADDI16SP")
+                                if !Self::get_rvc_bit12(word) {
+                                    match Self::get_rvc_bitwise_low(word) {
+                                        0 => panic!("Unimplemented RVC Op: C.SUB"),
+                                        1 => panic!("Unimplemented RVC Op: C.XOR"),
+                                        2 => Some(Instruction::CXOR(Self::get_rvc_rs1rd_compact(word), Self::get_rvc_rs2_compact(word))),
+                                        3 => Some(Instruction::CXAND(Self::get_rvc_rs1rd_compact(word), Self::get_rvc_rs2_compact(word))),
+                                        _ => panic!("get_rvc_bitwise_low() returned uncaught value")
+                                    }
                                 } else {
-                                    Some(Instruction::CXLUI(rd, Self::get_rvc_nzimm(word)))
-                                }
-                            },
-                            4 => {
-                                match Self::get_rvc_bitwise_high(word) {
-                                    0 => panic!("Unimplemented RVC Op: C.SRLI64"),
-                                    1 => panic!("Unimplemented RVC Op: C.SRAI64"),
-                                    2 => panic!("Unimplemented RVC Op: C.ANDI"),
-                                    3 => {
-                                        if Self::get_rvc_bit12(word) == false {
-                                            match Self::get_rvc_bitwise_low(word) {
-                                                0 => panic!("Unimplemented RVC Op: C.SUB"),
-                                                1 => panic!("Unimplemented RVC Op: C.XOR"),
-                                                2 => Some(Instruction::CXOR(Self::get_rvc_rs1rd_compact(word), Self::get_rvc_rs2_compact(word))),
-                                                3 => Some(Instruction::CXAND(Self::get_rvc_rs1rd_compact(word), Self::get_rvc_rs2_compact(word))),
-                                                _ => panic!("get_rvc_bitwise_low() returned uncaught value")
-                                            }
-                                        } else {
-                                            match Self::get_rvc_bitwise_low(word) {
-                                                0 => panic!("Unimplemented RVC Op: C.SUBW"),
-                                                1 => panic!("Unimplemented RVC Op: C.ADDW"),
-                                                2 => panic!("Unimplemented RVC Op: reserved (low: 10)"),
-                                                3 => panic!("Unimplemented RVC Op: reserved (low: 11)"),
-                                                _ => panic!("get_rvc_bitwise_low() returned uncaught value")
-                                            }
-                                        }
-                                    },
-                                    _ => panic!("get_rvc_bitwise_high() returned uncaught value"),
-                                }
-                            },
-                            5 => panic!("Unimplemented RVC Op: C.J"),
-                            6 => Some(Instruction::CXBEQZ(Self::get_rvc_rs1rd_compact(word), Self::get_rvc_imm(word))),
-                            7 => panic!("Unimplemented RVC Op: C.BNEZ"),                            
-                            _ => None,
-                        }
-                    },
-                    2 => {
-                        let rs1rd = Self::get_rvc_rs1rd(word);
-                        match Self::get_rvc_funct3(word) {
-                            0 => Some(Instruction::CXSLLI(rs1rd, Self::get_rvc_imm(word))),
-                            1 => panic!("Unimplemented RVC Op: C.FLDSP"),
-                            2 => panic!("Unimplemented RVC Op: C.LWSP"),
-                            3 => Some(Instruction::CXLDSP(rs1rd, Self::get_rvc_imm(word))),
-                            4 => {
-                                let rs2 = Self::get_rvc_rs2(word);
-                                match Self::get_rvc_bit12(word) {
-                                    false => {
-                                        if rs2 > 0 {
-                                            Some(Instruction::CXMV(rs2, Self::get_rvc_rs1rd(word)))
-                                        } else {
-                                            Some(Instruction::CXJR(Self::get_rvc_rs1rd(word)))
-                                        }
-                                    },
-                                    true => {
-                                        if rs2 > 0 {
-                                            Some(Instruction::CXADD(rs1rd, rs2))
-                                        } else {
-                                            if rs1rd > 0 {
-                                                panic!("Unimplemented RVC Op: C.JALR")
-                                            } else {
-                                                panic!("Unimplemented RVC Op: C.EBREAK")
-                                            }
-                                        }
+                                    match Self::get_rvc_bitwise_low(word) {
+                                        0 => panic!("Unimplemented RVC Op: C.SUBW"),
+                                        1 => panic!("Unimplemented RVC Op: C.ADDW"),
+                                        2 => panic!("Unimplemented RVC Op: reserved (low: 10)"),
+                                        3 => panic!("Unimplemented RVC Op: reserved (low: 11)"),
+                                        _ => panic!("get_rvc_bitwise_low() returned uncaught value")
                                     }
                                 }
                             },
-                            5 => panic!("Unimplemented RVC Op: C.FSDSP"),
-                            6 => panic!("Unimplemented RVC Op: C.SWSP"),
-                            7 => Some(Instruction::CXSDSP(Self::get_rvc_rs2(word), Self::get_rvc_imm(word))),
-                            _ => None,
+                            _ => panic!("get_rvc_bitwise_high() returned uncaught value"),
                         }
                     },
-                    _ => None
+                    5 => panic!("Unimplemented RVC Op: C.J"),
+                    6 => Some(Instruction::CXBEQZ(Self::get_rvc_rs1rd_compact(word), Self::get_rvc_imm(word))),
+                    7 => panic!("Unimplemented RVC Op: C.BNEZ"),                            
+                    _ => None,
                 }
-            } else {
-                println!("Raw opcode: {:#x} ({:#b})", opcode, opcode);
-                match opcode {
-                    0x3 => {
-                        match Self::get_funct3(word) {
-                            0x0 => Some(Instruction::LB(Self::get_rs1(word), Self::get_rd(word), Self::get_s_imm(word))),
-                            0x2 => Some(Instruction::LW(Self::get_rs1(word), Self::get_rd(word), Self::get_s_imm(word))),
-                            0x3 => Some(Instruction::LD(Self::get_rs1(word), Self::get_rd(word), Self::get_s_imm(word))),
-                            0x4 => Some(Instruction::LBU(Self::get_rs1(word), Self::get_rd(word), Self::get_s_imm(word))),
-                            _ => None   
-                        }
-                    }
-                    0x13 => {
-                        match Self::get_funct3(word) {
-                            0x0 => {
-                                match Self::get_funct7(word) {
-                                    _ => Some(Instruction::ADDI(Self::get_rs1(word), Self::get_i_imm(word)))
+            },
+            2 => {
+                let rs1rd = Self::get_rvc_rs1rd(word);
+                match Self::get_rvc_funct3(word) {
+                    0 => Some(Instruction::CXSLLI(rs1rd, Self::get_rvc_imm(word))),
+                    1 => panic!("Unimplemented RVC Op: C.FLDSP"),
+                    2 => panic!("Unimplemented RVC Op: C.LWSP"),
+                    3 => Some(Instruction::CXLDSP(rs1rd, Self::get_rvc_imm(word))),
+                    4 => {
+                        let rs2 = Self::get_rvc_rs2(word);
+                        if Self::get_rvc_bit12(word) {
+                            {
+                                if rs2 > 0 {
+                                    Some(Instruction::CXADD(rs1rd, rs2))
+                                } else if rs1rd > 0 {
+                                    panic!("Unimplemented RVC Op: C.JALR")
+                                } else {
+                                    panic!("Unimplemented RVC Op: C.EBREAK")
                                 }
                             }
-                            0x6 => Some(Instruction::ORI(Self::get_rs1(word), Self::get_rd(word), Self::get_i_imm(word))),
-                            0x7 => Some(Instruction::ANDI(Self::get_rs1(word), Self::get_rd(word), Self::get_i_imm(word))),
-                            _ => None
-                        }
-                    }
-                    0x17 => Some(Instruction::AUIPC(Self::get_rd(word), Self::get_u_imm(word))),
-                    0x1b => {
-                        match Self::get_funct3(word) {
-                            0 => panic!("Unimplemented opcode: ADDIW"),
-                            1 => Some(Instruction::SLLIW(Self::get_rs1(word), Self::get_rd(word), Self::get_i_imm(word))),
-                            5 => {
-                                match Self::get_funct7(word) {
-                                    0 => panic!("Unimplemented opcode: SRLIW"),
-                                    0x20 => panic!("Unimplemented opcode: SRAIW"),
-                                    _ => None
+                        } else {
+                            {
+                                if rs2 > 0 {
+                                    Some(Instruction::CXMV(rs2, Self::get_rvc_rs1rd(word)))
+                                } else {
+                                    Some(Instruction::CXJR(Self::get_rvc_rs1rd(word)))
                                 }
                             }
-                            _ => None
                         }
-                    }
-                    0x23 => {
-                        match Self::get_funct3(word) {
-                            0 => Some(Instruction::SB(Self::get_rs1(word), Self::get_rs2(word), Self::get_s_imm(word))),
-                            1 => None,
-                            2 => Some(Instruction::SW(Self::get_rs1(word), Self::get_rs2(word), Self::get_s_imm(word))),
-                            3 => Some(Instruction::SD(Self::get_rs1(word), Self::get_rs2(word), Self::get_s_imm(word))),
-                            _ => None
-                        }
-                    }
-                    0x33 => {
-                        match Self::get_funct3(word) {
-                            0 => {
-                                match Self::get_funct7(word) {
-                                    0 => panic!("Unimplemented opcode: ADD"),
-                                    1 => Some(Instruction::MUL(Self::get_rs1(word), Self::get_rs2(word), Self::get_rd(word))),
-                                    0x20 => panic!("Unimplemented opcode: SUB"),
-                                    _ => None
-                                }
-                            }
-                            6 => Some(Instruction::OR(Self::get_rs1(word), Self::get_rs2(word), Self::get_rd(word))),
-                            _ => None
-                        }
-                    }
-                    0x37 => Some(Instruction::LUI(Self::get_rd(word), Self::get_u_imm(word))),
-                    0x63 => {
-                        match Self::get_funct3(word) {
-                            0 => Some(Instruction::BEQ(Self::get_rs1(word), Self::get_rs2(word), Self::get_b_imm(word))),
-                            _ => None
-                        }
-                    }
-                    0x67 => {
-                        match Self::get_funct3(word) {
-                            0 => Some(Instruction::JALR(Self::get_rd(word), Self::get_rs1(word), Self::get_i_imm(word))),
-                            _ => None
-                        }
-                    }
-                    0x6f => Some(Instruction::JAL(Self::get_rd(word), Self::get_j_imm(word))),
-                    0x73 => {
-                        let rs2 = Self::get_rs2(word);
-                        match Self::get_funct3(word) {
-                            0 => {
-                                match Self::get_funct7(word) {
-                                    0 => {
-                                        if rs2 == 2 {
-                                            panic!("Unimplemented opcode: URET")
-                                        } else {
-                                            panic!("Unknown opcode type 0x73")
-                                        }
-                                    },
-                                    0x1 => Some(Instruction::EBREAK),
-                                    0x8 => {
-                                        if rs2 == 2 {
-                                            panic!("Unimplemented opcode: SRET")
-                                        } else if rs2 == 5 {
-                                            panic!("Unimplemented opcode: WFI")
-                                        } else {
-                                            panic!("Unknown opcode type 0x73")
-                                        }
-                                    },
-                                    0x9 => panic!("Unimplemented opcode: SFENCE.VMA"),
-                                    0x11 => panic!("Unimplemented opcode: HFENCE.BVMA"),
-                                    0x18 => Some(Instruction::MRET),
-                                    0x51 => panic!("Unimplemented opcode: HFENCE.GVMA"),
-                                    _ => None
-                                }
-                            },
-                            1 => {
-                                Some(Instruction::CSRRW(Self::get_rs1(word), Self::get_rd(word), Self::get_funct12(word)))
-                            }
-                            2 => {
-                                Some(Instruction::CSRRS(Self::get_rs1(word), Self::get_rd(word), Self::get_funct12(word)))
-                            }
-                            _ => None
-                        }
-                    }
-                    _ => None::<Instruction>
+                    },
+                    5 => panic!("Unimplemented RVC Op: C.FSDSP"),
+                    6 => panic!("Unimplemented RVC Op: C.SWSP"),
+                    7 => Some(Instruction::CXSDSP(Self::get_rvc_rs2(word), Self::get_rvc_imm(word))),
+                    _ => None,
+                }
+            },
+            _ => None
+        }
+    }
+    fn from_word_std(word: u32) -> Option<Instruction> {
+        let opcode = Self::get_opcode(word);
+        match opcode {
+            0x3 => {
+                match Self::get_funct3(word) {
+                    0x0 => Some(Instruction::LB(Self::get_rs1(word), Self::get_rd(word), Self::get_s_imm(word))),
+                    0x2 => Some(Instruction::LW(Self::get_rs1(word), Self::get_rd(word), Self::get_s_imm(word))),
+                    0x3 => Some(Instruction::LD(Self::get_rs1(word), Self::get_rd(word), Self::get_s_imm(word))),
+                    0x4 => Some(Instruction::LBU(Self::get_rs1(word), Self::get_rd(word), Self::get_s_imm(word))),
+                    _ => None   
                 }
             }
+            0x13 => {
+                match Self::get_funct3(word) {
+                    0x0 => {
+                        match Self::get_funct7(word) {
+                            _ => Some(Instruction::ADDI(Self::get_rs1(word), Self::get_i_imm(word)))
+                        }
+                    }
+                    0x6 => Some(Instruction::ORI(Self::get_rs1(word), Self::get_rd(word), Self::get_i_imm(word))),
+                    0x7 => Some(Instruction::ANDI(Self::get_rs1(word), Self::get_rd(word), Self::get_i_imm(word))),
+                    _ => None
+                }
+            }
+            0x17 => Some(Instruction::AUIPC(Self::get_rd(word), Self::get_u_imm(word))),
+            0x1b => {
+                match Self::get_funct3(word) {
+                    0 => panic!("Unimplemented opcode: ADDIW"),
+                    1 => Some(Instruction::SLLIW(Self::get_rs1(word), Self::get_rd(word), Self::get_i_imm(word))),
+                    5 => {
+                        match Self::get_funct7(word) {
+                            0 => panic!("Unimplemented opcode: SRLIW"),
+                            0x20 => panic!("Unimplemented opcode: SRAIW"),
+                            _ => None
+                        }
+                    }
+                    _ => None
+                }
+            }
+            0x23 => {
+                match Self::get_funct3(word) {
+                    0 => Some(Instruction::SB(Self::get_rs1(word), Self::get_rs2(word), Self::get_s_imm(word))),
+                    1 => None,
+                    2 => Some(Instruction::SW(Self::get_rs1(word), Self::get_rs2(word), Self::get_s_imm(word))),
+                    3 => Some(Instruction::SD(Self::get_rs1(word), Self::get_rs2(word), Self::get_s_imm(word))),
+                    _ => None
+                }
+            }
+            0x33 => {
+                match Self::get_funct3(word) {
+                    0 => {
+                        match Self::get_funct7(word) {
+                            0 => panic!("Unimplemented opcode: ADD"),
+                            1 => Some(Instruction::MUL(Self::get_rs1(word), Self::get_rs2(word), Self::get_rd(word))),
+                            0x20 => panic!("Unimplemented opcode: SUB"),
+                            _ => None
+                        }
+                    }
+                    6 => Some(Instruction::OR(Self::get_rs1(word), Self::get_rs2(word), Self::get_rd(word))),
+                    _ => None
+                }
+            }
+            0x37 => Some(Instruction::LUI(Self::get_rd(word), Self::get_u_imm(word))),
+            0x63 => {
+                match Self::get_funct3(word) {
+                    0 => Some(Instruction::BEQ(Self::get_rs1(word), Self::get_rs2(word), Self::get_b_imm(word))),
+                    _ => None
+                }
+            }
+            0x67 => {
+                match Self::get_funct3(word) {
+                    0 => Some(Instruction::JALR(Self::get_rd(word), Self::get_rs1(word), Self::get_i_imm(word))),
+                    _ => None
+                }
+            }
+            0x6f => Some(Instruction::JAL(Self::get_rd(word), Self::get_j_imm(word))),
+            0x73 => {
+                let rs2 = Self::get_rs2(word);
+                match Self::get_funct3(word) {
+                    0 => {
+                        match Self::get_funct7(word) {
+                            0 => {
+                                if rs2 == 2 {
+                                    panic!("Unimplemented opcode: URET")
+                                } else {
+                                    panic!("Unknown opcode type 0x73")
+                                }
+                            },
+                            0x1 => Some(Instruction::EBREAK),
+                            0x8 => {
+                                if rs2 == 2 {
+                                    panic!("Unimplemented opcode: SRET")
+                                } else if rs2 == 5 {
+                                    panic!("Unimplemented opcode: WFI")
+                                } else {
+                                    panic!("Unknown opcode type 0x73")
+                                }
+                            },
+                            0x9 => panic!("Unimplemented opcode: SFENCE.VMA"),
+                            0x11 => panic!("Unimplemented opcode: HFENCE.BVMA"),
+                            0x18 => Some(Instruction::MRET),
+                            0x51 => panic!("Unimplemented opcode: HFENCE.GVMA"),
+                            _ => None
+                        }
+                    },
+                    1 => {
+                        Some(Instruction::CSRRW(Self::get_rs1(word), Self::get_rd(word), Self::get_funct12(word)))
+                    }
+                    2 => {
+                        Some(Instruction::CSRRS(Self::get_rs1(word), Self::get_rd(word), Self::get_funct12(word)))
+                    }
+                    _ => None
+                }
+            }
+            _ => None::<Instruction>
         }
     }
 
@@ -492,9 +498,9 @@ impl Instruction {
     }
 
     fn get_j_imm(word: u32) -> i32 {
-        let mut disp20: u32 = ((word & 0x7FE00000) >> 20) | ((word & 0x100000) >> 9) | (word & 0xFF000) | ((word & 0x80000000) >> 11);
-        if disp20 & 0x100000 == 0x100000 {
-            disp20 |= 0xFFF00000;
+        let mut disp20: u32 = ((word & 0x7FE0_0000) >> 20) | ((word & 0x0010_0000) >> 9) | (word & 0xFF000) | ((word & 0x8000_0000) >> 11);
+        if disp20 & 0x0010_0000 == 0x0010_0000 {
+            disp20 |= 0xFFF0_0000;
         }
 
         disp20 as i32
@@ -655,7 +661,7 @@ impl CPU {
     fn trap(&mut self, cause: u64) {
         //UDWORD newstat = p->csr[i_MSTATUS] & 0xFFFFFFFFFFFFE777;
 	    //newstat |= (p->csr[i_MSTATUS] & 0x8) << 4;
-        let mut newstat = self.csr.read_csr(MSTATUS) & 0xFFFFFFFFFFFFE777;
+        let mut newstat = self.csr.read_csr(MSTATUS) & 0xFFFF_FFFF_FFFF_E777;
         newstat |= (self.csr.read_csr(MSTATUS) & 0x8) << 4;
 
         //p->csr[i_MCAUSE] = cause;
@@ -789,7 +795,7 @@ impl CPU {
             }
             Instruction::SLLIW(rs1, rd, imm_i) => {
                 let rs1_val = (self.registers.read_reg(rs1)) as u32;
-                let shamt = (imm_i & 0b111111) as u32;
+                let shamt = (imm_i & 0b11_1111) as u32;
                 let result = rs1_val.wrapping_shl(shamt);
                 println!("Opcode: SLLIW on rs1 x{}, rd x{} (rs1_val: {:x} shamt: {:x}, result: {:x}", rs1, rd, rs1_val, shamt, result);
                 self.registers.write_reg(rd, result as u64);
@@ -1113,13 +1119,11 @@ impl MemoryBus {
                 if rom_addr > self.boot_rom.len() {
                     0
                 } else {
-                    let word = LittleEndian::read_u32(&self.ram[(rom_addr) as usize..]);
-                    word
+                    LittleEndian::read_u32(&self.ram[(rom_addr) as usize..])
                 }
             }
             RAM_START ..= RAM_END => {
-                let word = LittleEndian::read_u32(&self.ram[(address-RAM_START) as usize..]);
-                word
+                LittleEndian::read_u32(&self.ram[(address-RAM_START) as usize..])   
             }
             _ => {
                 println!("Reading from unknown memory at address 0x{:x}", address);

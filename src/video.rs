@@ -26,10 +26,7 @@ struct PageRegisters {
     pg_type: PageType,
 }
 
-struct BWFourFBRegisters {
-    cur_page: u8,
-}
-
+#[derive(Default)]
 struct CGFBRegisters {
     cur_page: u8,
 }
@@ -55,6 +52,7 @@ impl CGFBRegisters {
     }
 }
 
+#[derive(Default)]
 pub struct CGFB {
     pages: Box<[u32]>,
     page_reg: Vec<PageRegisters>,
@@ -86,11 +84,11 @@ impl CGFB {
         self.page_reg[31].p_start = p_start;
         self.page_reg[31].p_end = p_end;
         self.fb_change_page_type(31, PageType::A8x8Atlas);
-        for i in 0..(256 * 8) {
-            let offset: usize = (64 * i) + p_start as usize;
+        for i in FONT_DATA_8X8.iter() {
+            let offset: usize = (64 * *i as usize) + p_start as usize;
             for y in 0..8 {
                 for x in 0..8 {
-                    let byte2bit: bool = ((FONT_DATA_8X8[i] >> (7 - x)) & 0x1) != 0;
+                    let byte2bit: bool = ((FONT_DATA_8X8[*i as usize] >> (7 - x)) & 0x1) != 0;
                     if byte2bit {
                         self.fb_draw_pixel_raw(offset, x, y, 0xFFFF_FFFF);
                     } else {
@@ -116,19 +114,17 @@ impl CGFB {
     }
 
     pub fn fb_print_char(&mut self, page: usize, x: u8, y: u8, letter: u16) {
-        if self.page_reg[page].pg_type == PageType::Text {
-            if page <= (CG_PAGENUM - 1) {
-                let page_width: usize = self.page_reg[page as usize].size_x as usize;
-                let page_offset = self.fb_get_page_start(page);
-                let y_start = (y as usize) * page_width as usize;
-                let offset: usize = page_offset + y_start;
-                let glyph = self.decode_font(letter as usize);
-                for font_x in 0..=7 {
-                    for font_y in 0..=7 {
-                        let page_coord = offset + (font_y * page_width) + ((x as usize * 8) + font_x);
-                        let letter_coord = (font_y * 8) + (font_x);
-                        self.pages[page_coord] = glyph[letter_coord]; 
-                    }
+        if self.page_reg[page].pg_type == PageType::Text && page <= (CG_PAGENUM - 1) {
+            let page_width: usize = self.page_reg[page as usize].size_x as usize;
+            let page_offset = self.fb_get_page_start(page);
+            let y_start = (y as usize) * page_width as usize;
+            let offset: usize = page_offset + y_start;
+            let glyph = self.decode_font(letter as usize);
+            for font_x in 0..=7 {
+                for font_y in 0..=7 {
+                    let page_coord = offset + (font_y * page_width) + ((x as usize * 8) + font_x);
+                    let letter_coord = (font_y * 8) + (font_x);
+                    self.pages[page_coord] = glyph[letter_coord]; 
                 }
             }
         }
@@ -146,25 +142,21 @@ impl CGFB {
         let page_offset = page as usize * (CG_FBSIZE / CG_PAGENUM);
 
         let fb_size: usize = self.page_reg[page].size_x as usize * self.page_reg[page].size_y as usize;
-        if self.page_reg[page].pg_type == PageType::Graphics {
-            if page <= 30 {
-                for i in page_offset..(page_offset+fb_size) {
-                    let line = (i - page_offset) / self.page_reg[page].size_x as usize;
-                    if line % 2 == 0 {
-                        if i % 2 == 0 {
-                            self.pages[i] = 0xFFFF_FFFF;
-                        }
-                        else {
-                            self.pages[i] = 0x0;
-                        }
-                    } else {
-                        if i % 2 == 1 {
-                            self.pages[i] = 0xFFFF_FFFF;
-                        }
-                        else {
-                            self.pages[i] = 0x0;
-                        }
+        if self.page_reg[page].pg_type == PageType::Graphics && page <= 30 {
+            for i in page_offset..(page_offset+fb_size) {
+                let line = (i - page_offset) / self.page_reg[page].size_x as usize;
+                if line % 2 == 0 {
+                    if i % 2 == 0 {
+                        self.pages[i] = 0xFFFF_FFFF;
                     }
+                    else {
+                        self.pages[i] = 0x0;
+                    }
+                } else if i % 2 == 1 {
+                    self.pages[i] = 0xFFFF_FFFF;
+                }
+                else {
+                    self.pages[i] = 0x0;
                 }
             }
         }
